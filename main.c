@@ -3,44 +3,49 @@
 #include <sodium.h>
 
 int main() {
-    unsigned char pk[crypto_sign_PUBLICKEYBYTES];
-    unsigned char sk[crypto_sign_SECRETKEYBYTES];
-    const unsigned char seed[32] = {0};
-    crypto_sign_seed_keypair(pk, sk, seed);
-
 #define MESSAGE (const unsigned char *) "yup"
 #define MESSAGE_LEN 3
-    const unsigned char crafted_msg[32] = {151, 29, 3, 237, 140, 141, 180, 68, 126, 104, 194, 24, 227, 99, 6, 107, 249, 58, 71, 1, 5, 251, 110, 97, 245, 246, 79, 160, 87, 196, 222, 197};
-    const unsigned char nonce[32] = {192, 120, 101, 190, 122, 145, 135, 203, 206, 241, 255, 71, 69, 183, 34, 147, 23, 215, 237, 82, 85, 205, 242, 82, 247, 44, 49, 58, 98, 176, 187, 13};
 
-    unsigned char sig[crypto_sign_BYTES];
+    unsigned char crafted_msg[32], proof[80], sig[crypto_sign_BYTES], pk[crypto_sign_PUBLICKEYBYTES];
 
-    crypto_sign_detached(sig, NULL, crafted_msg, 32, sk);
+    // We create the scope of the signer, over which we have no access when faking
+    // the signature.
+    {
+        unsigned char sk[crypto_sign_SECRETKEYBYTES];
+        crypto_sign_keypair(pk, sk);
 
-    if (crypto_sign_verify_detached(sig, crafted_msg, 32, pk))
-        printf("failed on ed25519 generation");
+        // Now let's use these keys for vrf generation. The message that we need
+        // to craft in order to extract the key is a value publicly available. However,
+        // libsodium does not export the functions to compute it. Nonetheless, it is
+        // computed internally. To simplify our lives, we slightly modify libsodium VRF
+        // verifier to return the crafted message.
+        crypto_vrf_ietfdraft03_prove(proof, sk, MESSAGE, MESSAGE_LEN);
 
-    // Now we should have a 64 bytes signature that corresponds to:
-    // * first 32 bytes represent the point R = k * G, where k = H(z || m)
-    // where z = H(sk)[32..]
-    // * second 32 bytes represent a scalar s = k + az * HRAM
-    // where HRAM = H(R || pk || m), and az = H(sk)[..32]
+        // Now, we have a proof that consists of 80 bytes that correspond to:
+        // * 32 bytes of an EC point that we can ignore
+        // * 16 bytes of a challenge C = H(pk, H, Gamma, U, V), where the values
+        // of H, Gamma, U and V are irrelevant.
+        // * 32 bytes of a scalar s' = k + C' * az
+        // where k = H(z || m), with z equal to above, and az as well.
 
+        unsigned char random_output[64];
+        if (crypto_vrf_ietfdraft03_verify(random_output, crafted_msg, pk, proof, MESSAGE, MESSAGE_LEN))
+            printf("failed VRF\n \n");
 
-    // Now let's use the same keys for vrf generation
-    unsigned char proof[80];
-    crypto_vrf_ietfdraft03_prove(proof, sk, MESSAGE, MESSAGE_LEN);
-    // Now, we have a proof that consists of 80 bytes that correspond to:
-    // * 32 bytes of an EC point that we can ignore
-    // * 16 bytes of a challenge C = H(pk, H, Gamma, U, V), where the values
-    // of H, Gamma, U and V are irrelevant.
-    // * 32 bytes of a scalar s' = k + C' * az
-    // where k = H(z || m), with z equal to above, and az as well.
+        // Now we use the same key to create an ed25519 signature for the crafted message. Note
+        // that the only 'trick' we are doing is asking the signer to sign a particular message, after
+        // she has used the key to create a VRF proof. We do not access the secret key in any other way.
+        crypto_sign_detached(sig, NULL, crafted_msg, 32, sk);
 
-    unsigned char random_output[64];
-    if (crypto_vrf_ietfdraft03_verify(random_output, pk, proof, MESSAGE, MESSAGE_LEN))
-        printf("failed VRF\n \n");
+        if (crypto_sign_verify_detached(sig, crafted_msg, 32, pk))
+            printf("failed on ed25519 generation");
 
+        // Now we should have a 64 bytes signature that corresponds to:
+        // * first 32 bytes represent the point R = k * G, where k = H(z || m)
+        // where z = H(sk)[32..]
+        // * second 32 bytes represent a scalar s = k + az * HRAM
+        // where HRAM = H(R || pk || m), and az = H(sk)[..32]
+    }
 
     // What is the problem here? That the two challenges are different. What does this mean?
     // That we can extract the secret key. Mainly, we have that:
@@ -48,8 +53,9 @@ int main() {
 
     // Let's try to break it:
 
-    unsigned char c[64], cprime[64], s[32], sprime[32];
-    // First we need to compute c.
+    unsigned char c[64], cprime[32];
+    // First we need to compute c, as it is not given in the ed25519 signature. This is done
+    // using public values.
     crypto_hash_sha512_state hs;
 
     crypto_hash_sha512_init(&hs);
@@ -60,35 +66,26 @@ int main() {
 
     crypto_core_ed25519_scalar_reduce(c, c);
 
-    memcpy(s, sig + 32, 32);
+    // Now wes simply copy the challenge into a 16 byte string
     memcpy(cprime, proof + 32, 16);
-    memset(cprime + 16, 0, 48); // Just for sanity, probably they're still zeroes.
-    memcpy(sprime, proof + 48, 32);
+    memset(cprime + 16, 0, 16); // Just for sanity.
+
 
     // Now we have all we need, let's extract the secret.
-    unsigned char sminussprime[32], cminuscprime[32], cminuscprimeinv[32], extracted_skey[32], extracted_pkey[32];
-    crypto_core_ed25519_scalar_sub(sminussprime, s, sprime);
-    crypto_core_ed25519_scalar_sub(cminuscprime, c, cprime);
-    crypto_core_ed25519_scalar_invert(cminuscprimeinv, cminuscprime);
+    unsigned char cminuscprimeinv[32], extracted_skey[32], extracted_pkey[32];
+    crypto_core_ed25519_scalar_sub(extracted_skey, sig + 32, proof + 48);
+    crypto_core_ed25519_scalar_sub(cminuscprimeinv, c, cprime);
+    crypto_core_ed25519_scalar_invert(cminuscprimeinv, cminuscprimeinv);
 
-    crypto_core_ed25519_scalar_mul(extracted_skey, cminuscprimeinv, sminussprime);
-
-    printf("extr_skey: ");
-    for (int i = 0; i < 32; i++) {
-        printf("%02x", extracted_skey[i]);
-    }
-    printf("\n");
+    crypto_core_ed25519_scalar_mul(extracted_skey, extracted_skey, cminuscprimeinv);
 
     crypto_scalarmult_ed25519_base_noclamp(extracted_pkey, extracted_skey);
 
-    printf("extr_pkey: ");
-    for (int i = 0; i < 32; i++) {
-        printf("%02x", extracted_pkey[i]);
-    }
-    printf("\n");
-
 
     // So now, let's create a fake ed25519 signature for message {0} [not signed before]
+    // We cannot use the normal API because the algorithm uses the preimage of an extension
+    // of the key we have extracted. However, the 'missing' data is not necessary to forge
+    // a signature. Goes without saying that the adversary now can create invalid VRF proofs.
     unsigned char nonce_fake[32], challenge[64], sig_fake[64], reduced_c[32];
     crypto_hash_sha512_state hs_f;
     unsigned char msg[32] = {0};
@@ -111,10 +108,9 @@ int main() {
     crypto_core_ed25519_scalar_add(sig_fake + 32, sig_fake + 32, nonce_fake);
 
     if (crypto_sign_verify_detached(sig_fake, msg, 32, pk))
-        printf("failed to fake ed25519\n");
+        printf("Failed to fake ed25519\n");
     else
-        printf("successfully faked an ed25519 sig\n");
+        printf("Successfully faked an ed25519 sig\n");
 
-    printf("Hello, World!\n");
     return 0;
 }
