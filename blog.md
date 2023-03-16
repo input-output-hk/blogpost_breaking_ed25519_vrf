@@ -1,13 +1,15 @@
 # Insecurity of secret key re-usage
-In the pre-blockchain era, the typical advise from cryptographers was ``Don't roll your own crypto!''. The intention behind this advise is to avoid security pitfalls, which are less likely to exist in rigorously researched inventions. However, this advise is muffled by the accelerated advancement of the blockchain space, where new cryptography is invented and rolled out every now and then. In this article, we re-emphasize the need for rigorous security analysis of every new crypto, by demonstrating how a natural shortcut can lead to a catastrophic consequence.
+In the pre-blockchain era, the typical advise from cryptographers was ``Don't roll your own crypto!''. 
+The intention behind this advice is to avoid security pitfalls, which are less likely to exist in 
+rigorously researched inventions. However, this advice is muffled by the accelerated advancement 
+of the blockchain space, where new cryptography is invented and rolled out every now and then. In 
+this article, we re-emphasize the need for rigorous security analysis of every new crypto, by 
+demonstrating how a natural shortcut can lead to a catastrophic consequence.
 
-Specifically, Schnorr signatures and VRFs (verifiable random functions) are used in Cardano. Given their similarly structured public keys, one may be tempted to use the same secret key for both the primitives. However, doing so can allow an adversary to easily extract the secret key. 
-
-// I think the rest of the content could be simplified for ease of reading. For example, it's worth considering if there is a way to not specify $h_0, h_1, ..., h_{2b - 1}$ and just mention that to be secret key. One blog, one idea - kind of blogs get more readability. So you may want to limit the complexity to whatever is required to communicate that idea.  
-
-
-
-
+Specifically, Schnorr signatures and VRFs (verifiable random functions) are used in Cardano. 
+Given their similarly structured public keys, one may be tempted to use the same secret key 
+for both the primitives. However, doing so can allow an adversary to easily extract the secret 
+key. 
 
 A basic security property of digital signature algorithms is that they are existentially
 unforgeable under chose message attacks (EU-CMA). In layman's terms, what this means
@@ -16,7 +18,7 @@ a signature for, it is impossible to forge a valid signature for a message that
 has not yet been signed. Cryptosystems that are used in Cardano are proven to
 be CPA-secure, such as [ed25519](https://datatracker.ietf.org/doc/rfc8032/) or 
 [ECVRF](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-14). However, these properties are 
-proven in isolation, i.e. ed25519 is CPA-secure assuming one uses the secret key
+proven in isolation, i.e. ed25519 is EU-CMA-secure assuming one uses the secret key
 explicitly as defined in the analysed protocol. 
 
 Very often cryptography engineers get asked whether one can use the same 
@@ -36,10 +38,10 @@ distinct cryptosystems discloses the secret. However, it should serve as an
 example that if one is not certain of whether using the same key for two 
 algorithms is secure or not, then the assumption should be that it is not.
 
-## Schnorr signatures
+## Schnorr, the predecessor of Ed25519 and ECVRF
 [Schnorr](https://en.wikipedia.org/wiki/Schnorr_signature) signatures 
 have been around for quite some years, and they are
-deployed and used in many contexts. In Cardano, following our valentine 
+deployed and used in many contexts. In Cardano, following our [valentine](https://docs.cardano.org/cardano-testnet/about/secp) 
 upgrade, we introduced native support for Schnorr signatures over curve SECP256k1 
 in Plutus. Schnorr signatures are simply 
 [sigma protocols](https://en.wikipedia.org/wiki/Proof_of_knowledge#Sigma_protocols) that are 
@@ -79,7 +81,7 @@ $$sk = (s - s') * (c - c')^{-1}$$
 Fortunately, if the value $k$ is chosen uniformly at random, the above happens with probability 
 $1 / 2^{256}$, which is negligible over the security parameter. 
 
-## Ed25519
+### Ed25519
 The signature scheme, ed25519, was introduced by Bernstein, Duif, Lange, Schwabe and Yang.
 Essentially, this signature scheme is a Schnorr signature scheme but defined specifically 
 over curve Edwards25519 for efficiency and security considerations. We don't need to cover 
@@ -91,46 +93,40 @@ choice was that in the past lack of secure sources of randomness resulted in the
 [security flaw](https://fahrplan.events.ccc.de/congress/2010/Fahrplan/attachments/1780_27c3_console_hacking_2010.pdf)
 of the secret keys for ECDSA. Hence, by computing this value pseudorandomly, one relies on the security
 of the pseudorandom generator (which is in control of the developers) instead of a secure source
-of randomness (which is not under the control of the developers). In particular, ed25519
-is defined as follows:
+of randomness (which is not in control of the developers). Below, we present a simplified version
+of ed25519, it differs from the standard, but not in any meaningful way for the attack described
+in this blogpost. Let $\texttt{KDF}$ be a key derivation function[^2] that takes as input a key and an index, and
+returns an integer modulo $p$. Let $(sk, vk)$ be a key-pair such that $vk = \texttt{KDF}(sk, 0) \cdot G$. The 
+protocol proceeds as follows:
 
-* `keygen` returns a key-pair $(sk, vk)$. First, it chooses $sk\gets \lbrace 0,1\rbrace^{256}$ uniformly
-  at random. Next, let $(h_0, h_1, ..., h_{2b - 1})\gets H(sk)$,
-  and compute the signing key, $\texttt{sig\\_key} \gets 2^{b-2} + \sum _{3\leq i\leq b-3}2^i h_i$
-  . Finally, compute $vk \gets \texttt{sig\\_key} \cdot G$, and return $(sk, vk)$.
-* `sign`$(sk, vk, m)$ takes as input a keypair $(sk, vk)$ and a message $m$, and returns a
-  signature $sig$. Let $k \gets H(h_b, \ldots, h_{2b-1}, m)$, and interpret the result as a little-endian
-  integer in $\{0,1,\ldots, 2^{2b}-1\}$. Let $R \gets k\cdot G$, and $s \gets (k + H(R, A, M)\cdot \texttt{sig\\_key}) \mod p$. 
-  Return $sig \gets (R, s)$. 
-* `verify`$(m, vk, sig)$ takes as input a message $m$, a verification key $vk$ and a signature
-  $sig$, and returns $r\in\lbrace\bot, \top\rbrace$ depending on whether the signature is valid or not. The algorithm
-  returns $\bot$ if the following equation holds and $\top$ otherwise:
-  $$s\cdot G = R + H(R, vk, m)\cdot vk.$$
+- [P] selects a (pseudo)random scalar $k = \texttt{KDF}(sk || m, 1)$, and computes $R = k \cdot G$, and sends $R$ to the verifier
+- [V] selects a random scalar $c$, and sends it to the prover
+- [P] computes $s = k + c * \texttt{KDF}(sk, 0)$, and sends it to the verifier
+- [V] accepts if and only if $s * G = R + c * vk$.
 
 One can see how closely related both algorithms (Schnorr and ed25519) are. Note that in this secret key generation, 
 the secret key is not used to multiply the elliptic curve base point, 
-but instead to compute a hash and use the output to perform these operations.
+but instead to derive two scalars. As noted above, this algorithm can be made non-interactive via the Fiat-Shamir
+heuristic. 
 
-## ECVRF
+### ECVRF
 The ECVRF is yet another protocol that is highly inspired from Schnorr in general, and ed25519 in particular. The
 concrete scheme that we look into is ECVRF-EDWARDS25519-SHA512-ELL2, from the VRF [irtf draft](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-14#name-ecvrf-ciphersuites).
 A VRF, namely a Verifiable Random Function, allows a prover to create some pseudorandom value associated with
-its private key, and prove that it did so correctly. The details of why that is useful or how it is used is not 
+its private key, and prove that it did so correctly. The details of why that is useful or how it is used are not 
 relevant here. However, let's have a look at how it works. In this algorithm we use a different hash function, 
-$H_{s2c}$, that takes as input an array of bytes and returns a point in the elliptic curve. 
+$H_{s2c}$, that takes as input an array of bytes and returns a point in the elliptic curve. Again, we simplify
+the protocol in non-meaningful ways for this blogpost core goal (breaking both VRF and Ed25519).
+Let $(sk, vk)$ be a key-pair such that $vk = \texttt{KDF}(sk, 0) \cdot G$. The
+protocol proceeds as follows:
 
-* Key generation happens exactly as with ed25519. i.e. we have the same key-pair.
-* `GenProof`$(sk, vk, m)$ takes as input a keypair $(sk, vk)$ and a message
-  $m$, and returns the VRF randomness $outoput$ together with a proof $proof$. Use $sk$ to
-  derive $\texttt{sig\\_key}$. Let $L \gets H _ {s2c}(vk, m)$. Let $\Gamma \gets sk\cdot H$. Let 
-  $k \gets H(h_b, \ldots, h _ {2b-1}, L)$. Let $R\gets k\cdot G$. Let $c \gets H(L||\Gamma|| R || k\cdot L)[..128]$. 
-  Compute $s \gets (r + c\cdot sig\\_key)\mod p$. Finally, return the proof $proof \gets (\Gamma, c, s)$ and the randomness
-  $output \gets H(\texttt{suite\\_string}|| 0x03||8\cdot\Gamma|| 0x00)$.
-* `verify`$(m, vk, proof)$ takes as input a message $m$, a verification key $vk$ and a vrf proof
-  $proof$, and returns $output$ or $\top$. It parses the proof as $(\Gamma, c, s) = proof$, and
-  computes $L\gets H_{s2c}(vk, m)$. Let $U \gets s\cdot G - c\cdot vk$ and $V \gets s\cdot L - c\cdot\Gamma$. 
-  Compute the challenge $c'\gets H(L||\Gamma|| U|| V)[..128]$.
-  If $c'=c$, then return $output \gets  H(\texttt{suite\\_string}||0x03||8\cdot\Gamma|| 0x00)$, otherwise, return $\bot$.
+- [P] computes $L \gets H _ {s2c}(vk, m)$, $P\gets k \cdot L$,  and $\Gamma \gets \texttt{KDF}(sk, 0)\cdot L$.
+  Next, it selects a (pseudo)random scalar $k = \texttt{KDF}(sk || L, 1)$, and computes $R = k \cdot G$. 
+  Next,It sends $R, \Gamma, P$ to the verifier.
+- [V] selects a random scalar $c$, and sends it to the prover
+- [P] computes $s = k + c * \texttt{KDF}(sk, 0)$, and sends it to the verifier
+- [V] computes $L \gets H _ {s2c}(vk, m)$, and accepts if and only if $s * G = R + c * vk$ and 
+  $s * L = P + c * \Gamma$.
 
 Ahá! seeing this we can conclude that for a given secret key $sk$, both algorithms ed25519 and ECVRF share the 
 same public key. Well, this is convenient. We can prove ownership of a VRF key using an ed25519 signature, which
@@ -139,19 +135,16 @@ turns out to be smaller and cheaper to verify. Or can we?
 ## Don't share your secrets!
 If you are reading this blogpost I guess that you know what is coming next. Indeed, if we share the secret keys for
 these two algorithms, an adversary could trick an ed25519 signer to basically expose its private key. The way we
-can do this came in a spoiler early on! What is essentially happening here is that we could have the same value
-of $R$ for two distinct values of $c$. In ed25519, the random nonce that the signer commits to is computed via
-$k \gets H(h_b, \ldots, h_{2b-1}, m)$. In VRF, the value is computed via $k \gets H(h_b, \ldots, h_{2b-1}, L)$. 
-However, the challenge is computed via $H(R, A, M)$ and 
-$H(L||\Gamma|| k\cdot G|| k\cdot L)[..128]$ respectively.
+can do this came in a spoiler early on! What is essentially happening here is both VRF and ed25519 use the
+same key derivation function. On the one hand this results in the same $pk$ for a given $sk$. However, this also means
+that one can trick an ed25519 signer produce the same value of $k$ (and consequently $R$) as the VRF counterpart, while
+having different values of the challenge $c$. If the adversary manages to do this, then the secret key can be extracted! 
+Worst of all is that it is not an attack hard to pull-off. Given a VRF proof for public key $pk$, the adversary simply 
+needs to request an ed25519 signature from $pk$'s owner to sign $L$, which is a public value. Then both nonces $k$ will 
+be identical, and the adversary is capable of extracting the key.
 
-
-Here is where the devil lies. We can trick the ed25519 signer to create the same value of $k$, but we will get a
-different value of $c$. If the adversary manages to do this, then the secret key can be extracted! Worst of all is 
-that it is not an attack hard to pull-off. Given a VRF proof for public key $pk$, the adversary simply needs to 
-request an ed25519 signature from $pk$'s owner to sign $L$, which is a public value. To showcase the simplicity of
-the attack, we've implemented a simple script that, given a VRF proof for any message, requests the key owner to
-sign a particular message with ed25519, and this results in an extraction of the secret key.
+To showcase the simplicity of the attack, we've implemented a simple script that, given a VRF proof for any message, requests 
+the key owner to sign a particular message with ed25519, and this results in an extraction of the secret key.
 
 We begin by defining the message we'll use for the VRF proof, and initialising some variables.
 ```C
@@ -297,3 +290,6 @@ keys among different cryptosystems.
 [^1]: A non-expert reader should not be concerned of what this really means. Simply
 one should trust that extracting sk from pk is computationally hard and that
 operations over elliptic curve points are associative and cyclic.
+
+[^2]: A key derivation function can simply be seen as a function that, given a secret seed, derives some 
+secret value in a deterministic way.
