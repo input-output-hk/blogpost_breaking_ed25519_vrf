@@ -1,4 +1,14 @@
 # Insecurity of secret key re-usage
+In the pre-blockchain era, the typical advise from cryptographers was ``Don't roll your own crypto!''. The intention behind this advise is to avoid security pitfalls, which are less likely to exist in rigorously researched inventions. However, this advise is muffled by the accelerated advancement of the blockchain space, where new cryptography is invented and rolled out every now and then. In this article, we re-emphasize the need for rigorous security analysis of every new crypto, by demonstrating how a natural shortcut can lead to a catastrophic consequence.
+
+Specifically, Schnorr signatures and VRFs (verifiable random functions) are used in Cardano. Given their similarly structured public keys, one may be tempted to use the same secret key for both the primitives. However, doing so can allow an adversary to easily extract the secret key. 
+
+// I think the rest of the content could be simplified for ease of reading. For example, it's worth considering if there is a way to not specify $h_0, h_1, ..., h_{2b - 1}$ and just mention that to be secret key. One blog, one idea - kind of blogs get more readability. So you may want to limit the complexity to whatever is required to communicate that idea.  
+
+
+
+
+
 A basic security property of digital signature algorithms is that they are existentially
 unforgeable under chose message attacks (EU-CMA). In layman's terms, what this means
 is that regardless of what message the adversary requests the signer to produce
