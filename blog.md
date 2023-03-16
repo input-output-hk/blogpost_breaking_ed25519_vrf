@@ -1,4 +1,8 @@
 # Insecurity of secret key re-usage
+_[tl;dr]: In this blogpost we show how to extract the key of an ed25519 keypair if its secret is
+also used to generate a Verifiable Random Function proof. We create a script that performs such 
+an extraction over libsodium._
+
 In the pre-blockchain era, the typical advise from cryptographers was ``Don't roll your own crypto!''. 
 The intention behind this advice is to avoid security pitfalls, which are less likely to exist in 
 rigorously researched inventions. However, this advice is muffled by the accelerated advancement 
@@ -286,6 +290,9 @@ used in VRF and that of ed25519.
 
 Of course, the best solution, and the one suggested in this blogpost, is to not share the secret 
 keys among different cryptosystems.
+
+## Acknowledgements
+Thanks to my wonderful colleagues, Gamze Kilic and Vanishree Rao for comments and review! 
 
 [^1]: A non-expert reader should not be concerned of what this really means. Simply
 one should trust that extracting sk from pk is computationally hard and that
