@@ -10,25 +10,19 @@ of the blockchain space, where new cryptography is invented and rolled out every
 this article, we re-emphasize the need for rigorous security analysis of every new crypto, by 
 demonstrating how a natural shortcut can lead to a catastrophic consequence.
 
-Specifically, Schnorr signatures and VRFs (verifiable random functions) are used in Cardano. 
+Specifically, ed25519 signatures and VRFs (verifiable random functions) are used in Cardano. 
 Given their similarly structured public keys, one may be tempted to use the same secret key 
 for both the primitives. However, doing so can allow an adversary to easily extract the secret 
-key. 
-
-A basic security property of digital signature algorithms is that they are existentially
-unforgeable under chose message attacks (EU-CMA). In layman's terms, what this means
-is that regardless of what message the adversary requests the signer to produce
-a signature for, it is impossible to forge a valid signature for a message that 
-has not yet been signed. Cryptosystems that are used in Cardano are proven to
-be CPA-secure, such as [ed25519](https://datatracker.ietf.org/doc/rfc8032/) or 
+key. Cryptosystems that are used in Cardano are proven to
+be secure, such as [ed25519](https://datatracker.ietf.org/doc/rfc8032/) or 
 [ECVRF](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-14). However, these properties are 
-proven in isolation, i.e. ed25519 is EU-CMA-secure assuming one uses the secret key
+proven in isolation, i.e. ed25519 is secure assuming one uses the secret key
 explicitly as defined in the analysed protocol. 
 
 Very often cryptography engineers get asked whether one can use the same 
-secret key for different algorithms. This is clearly bad practice - one should
+secret key for different algorithms. This natural shortcut is bad practice - one should
 only use the secret key for its intended purpose, even if it's 'only' 32 bytes. 
-My common answer, specifically
+The common answer, specifically
 if replied generically, is 'no'. However, sometimes the arguments used (formal
 security is studied in isolation, it is not well understood what happens if we
 use a secret key for different purposes, etc) are too abstract for engineers.
@@ -69,12 +63,12 @@ replaced by a hash function, which is assumed to provide random, unpredictable
 outputs. Formally, this is called the 
 [Fiat-Shamir](https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic) heuristic, and is used in more
 modern Zero Knowledge Proofs (yes! Schnorr signatures are very simple proofs of knowledge) to make
-them non-interactive.
+them non-interactive. For sake of simplicity, in this blogpost we describe all procedures
+interactively, and note that any of them can be made non-interactive via the Fiat-Shamir 
+heuristic.
 
-This signature scheme guarantees EU-CMA.
-However, this property is proven secure if the secret material is used exactly
-as described in the protocol. As a matter of fact, producing two signatures that 
-share the same value $R$ but a different value $s$ completely breaks the system (for 
+Subtle deviations from the protocol can be catastrophic. One such example is producing two signatures 
+that share the same value $R$ but a different value $s$ completely breaks the system (for 
 example by using an incorrect source of randomness that  returns the same value of k). With 
 high-school level algebra knowledge, it is easy to see why. Assume we have two valid
 signatures, $(R, s)$ and $(R, s')$ with $s \neq s'$. Recall that the value $c$ and $c'$
