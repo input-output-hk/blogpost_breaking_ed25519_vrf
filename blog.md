@@ -68,13 +68,13 @@ interactively, and note that any of them can be made non-interactive via the Fia
 heuristic.
 
 Subtle deviations from the protocol can be catastrophic. One such example is producing two signatures 
-that share the same value $R$ but a different value $s$ completely breaks the system (for 
+that share the same value $R$ but a different value $s$, this completely breaks the system (for 
 example by using an incorrect source of randomness that  returns the same value of k). With 
 high-school level algebra knowledge, it is easy to see why. Assume we have two valid
 signatures, $(R, s)$ and $(R, s')$ with $s \neq s'$. Recall that the value $c$ and $c'$
 are known to the verifier, and the latter knows that $s = k + c * sk$. Given that the
-value of $R$ is equal in both proofs, then the verifier can compute the secret key as
-$$sk = (s - s') * (c - c')^{-1}$$
+value of $R$ (and therefore $k$) is equal in both proofs, then the verifier can compute
+the secret key as $$sk = (s - s') * (c - c')^{-1}$$
 
 Fortunately, if the value $k$ is chosen uniformly at random, the above happens with probability 
 $1 / 2^{256}$, which is negligible over the security parameter. 
@@ -97,7 +97,7 @@ in this blogpost. Let $\texttt{KDF}$ be a key derivation function[^2] that takes
 returns an integer modulo $p$. Let $(sk, vk)$ be a key-pair such that $vk = \texttt{KDF}(sk, 0) \cdot G$. The 
 protocol proceeds as follows:
 
-- [P] selects a (pseudo)random scalar $k = \texttt{KDF}(sk || m, 1)$, and computes $R = k \cdot G$, and sends $R$ to the verifier
+- [P] selects a (pseudo)random scalar $k = \texttt{KDF}(sk || m, 1)$, computes $R = k \cdot G$, and sends $R$ to the verifier
 - [V] selects a random scalar $c$, and sends it to the prover
 - [P] computes $s = k + c * \texttt{KDF}(sk, 0)$, and sends it to the verifier
 - [V] accepts if and only if $s * G = R + c * vk$.
@@ -114,13 +114,13 @@ A VRF, namely a Verifiable Random Function, allows a prover to create some pseud
 its private key, and prove that it did so correctly. The details of why that is useful or how it is used are not 
 relevant here. However, let's have a look at how it works. In this algorithm we use a different hash function, 
 $H_{s2c}$, that takes as input an array of bytes and returns a point in the elliptic curve. Again, we simplify
-the protocol in non-meaningful ways for this blogpost core goal (breaking both VRF and Ed25519).
+the protocol for this blogpost core goal (breaking both VRF and Ed25519).
 Let $(sk, vk)$ be a key-pair such that $vk = \texttt{KDF}(sk, 0) \cdot G$. The
 protocol proceeds as follows:
 
-- [P] computes $L \gets H _ {s2c}(vk, m)$, $P\gets k \cdot L$,  and $\Gamma \gets \texttt{KDF}(sk, 0)\cdot L$.
-  Next, it selects a (pseudo)random scalar $k = \texttt{KDF}(sk || L, 1)$, and computes $R = k \cdot G$. 
-  Next,It sends $R, \Gamma, P$ to the verifier.
+- [P] computes $L \gets H _ {s2c}(vk, m)$ and $\Gamma \gets \texttt{KDF}(sk, 0)\cdot L$.
+  Next, it selects a (pseudo)random scalar $k = \texttt{KDF}(sk || L, 1)$, and computes $R = k \cdot G$,
+  and $P\gets k \cdot L$. It sends $R, \Gamma, P$ to the verifier.
 - [V] selects a random scalar $c$, and sends it to the prover
 - [P] computes $s = k + c * \texttt{KDF}(sk, 0)$, and sends it to the verifier
 - [V] computes $L \gets H _ {s2c}(vk, m)$, and accepts if and only if $s * G = R + c * vk$ and 
@@ -131,7 +131,7 @@ same public key. Well, this is convenient. We can prove ownership of a VRF key u
 turns out to be smaller and cheaper to verify. Or can we?
 
 ## Don't share your secrets!
-If you are reading this blogpost I guess that you know what is coming next. Indeed, if we share the secret keys for
+If you are reading this blogpost you know what is coming next. Indeed, if we share the secret keys for
 these two algorithms, an adversary could trick an ed25519 signer to basically expose its private key. The way we
 can do this came in a spoiler early on! What is essentially happening here is both VRF and ed25519 use the
 same key derivation function. On the one hand this results in the same $pk$ for a given $sk$. However, this also means
@@ -139,10 +139,11 @@ that one can trick an ed25519 signer produce the same value of $k$ (and conseque
 having different values of the challenge $c$. If the adversary manages to do this, then the secret key can be extracted! 
 Worst of all is that it is not an attack hard to pull-off. Given a VRF proof for public key $pk$, the adversary simply 
 needs to request an ed25519 signature from $pk$'s owner to sign $L$, which is a public value. Then both nonces $k$ will 
-be identical, and the adversary is capable of extracting the key.
+be identical, and the adversary can recover the key.
 
 To showcase the simplicity of the attack, we've implemented a simple script that, given a VRF proof for any message, requests 
-the key owner to sign a particular message with ed25519, and this results in an extraction of the secret key.
+the key owner to sign a particular message with ed25519, and this results in an extraction of the secret key. We show how 
+the forged signature is accepted by libsodium's ed25519 verifier.
 
 We begin by defining the message we'll use for the VRF proof, and initialising some variables.
 ```C
