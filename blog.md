@@ -36,10 +36,10 @@ distinct cryptosystems discloses the secret. However, it should serve as an
 example that if one is not certain of whether using the same key for two 
 algorithms is secure or not, then the assumption should be that it is not.
 
-## Schnorr, the predecessor of Ed25519 and ECVRF
-[Schnorr](https://en.wikipedia.org/wiki/Schnorr_signature) signatures 
-have been around for quite some years, and they are
-deployed and used in many contexts. In Cardano, following our [valentine](https://docs.cardano.org/cardano-testnet/about/secp) 
+## Schnorr Signatures, the Predecessor of Ed25519 and ECVRF
+We will begin by explaining [Schnorr](https://en.wikipedia.org/wiki/Schnorr_signature) signatures, which was the basis of Ed25519 and ECVRF designs. 
+Schnorr signatures have been around for quite some years, and they are
+deployed widely in many applications. In Cardano, following our [valentine](https://docs.cardano.org/cardano-testnet/about/secp) 
 upgrade, we introduced native support for Schnorr signatures over curve SECP256k1 
 in Plutus. Schnorr signatures are simply 
 [sigma protocols](https://en.wikipedia.org/wiki/Proof_of_knowledge#Sigma_protocols) that are 
@@ -54,20 +54,13 @@ the verifier [V]) as follows:
 - [P] computes $s = k + c * sk$, and sends it to the verifier
 - [V] accepts if and only if $s * G = R + c * vk$. 
 
-If one extends $s, R$ and $pk$, it is easy to see that if the protocol is followed,
-the verifier will accept the signature. However, we've just described an interactive
-protocol, where there's no message involved. How can that be a signature algorithm? 
-Indeed, a signature algorithm would be extremely impractical if the signer and verifier 
-would have to interact. To that end, the first step of the verifier (computing the 
-random challenge) is replaced by a hash function, which is assumed to provide random, 
-unpredictable outputs. Here is where the message comes into play. In order to link a signature
+Note that we have just described an interactive
+protocol, where there is no message involved. We will now describe how it is transformed into a message signing non-interactive version. A typical method used in Cryptography is the so-called [Fiat-Shamir](https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic) transformation that replaces the random challenges with outputs of a random oralce, where the input to the random oracle is the transcript thus far. Furthermore, in order to link a signature
 (as described above) to a message, the latter is inlcuded when computing the hash that 
-defines the challenge. Formally, this is called the 
-[Fiat-Shamir](https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic) heuristic, and is used in more
-modern Zero Knowledge Proofs (yes! Schnorr signatures are very simple proofs of knowledge) to make
-them non-interactive. For sake of simplicity, in this blogpost we describe all procedures
-interactively, and note that any of them can be made non-interactive via the Fiat-Shamir 
-heuristic. Therefore, we omit the message from the Schnorr-like signature schemes 
+defines the challenge. 
+
+For readability, in this blogpost we describe all algorithms in their interactive version and note that any of them can be made non-interactive via the Fiat-Shamir 
+heuristic. Furthermore, for simplicity, we omit specifying the message from the Schnorr-like signature schemes 
 descriptions.
 
 Subtle deviations from the protocol can be catastrophic. One such example is producing two signatures 
