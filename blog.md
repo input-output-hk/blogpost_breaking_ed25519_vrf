@@ -10,28 +10,22 @@ of the blockchain space, where new cryptography is invented and rolled out every
 this article, we re-emphasize the need for rigorous security analysis of every new crypto, by 
 demonstrating how a natural shortcut can lead to a catastrophic consequence.
 
-Specifically, ed25519 signatures and VRFs (verifiable random functions) are used in Cardano. 
-Given their similarly structured public keys, one may be tempted to use the same secret key 
-for both the primitives. However, doing so can allow an adversary to easily extract the secret 
-key. Cryptosystems that are used in Cardano are proven to
-be secure, such as [ed25519](https://datatracker.ietf.org/doc/rfc8032/) or 
-[ECVRF](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-14). However, these properties are 
-proven in isolation, i.e. ed25519 is secure assuming one uses the secret key
-explicitly as defined in the analysed protocol. 
-
-Very often cryptography engineers get asked whether one can use the same 
+Often, cryptographers get asked if the same 
 secret key for different algorithms. This natural shortcut is bad practice - one should
 only use the secret key for its intended purpose, even if it's 'only' 32 bytes. 
 The common answer, specifically
-if replied generically, is 'no'. However, sometimes the arguments used (formal
-security is studied in isolation, it is not well understood what happens if we
-use a secret key for different purposes, etc) are too abstract for engineers.
+if replied generically, is 'no'. However, the reasons usually quoted -- namely, security analysis being done only in the standalone setting whereby there are no security guarantees on usages that deviate from the prescribed method -- tend to be too abstract.
 
-In this blogpost we show how using the same key for ed25519 and 
-ECVRF completely breaks the security of both algorithms, and allows an adversary 
-to practically extract the signing key and forge signatures and VRF proofs. 
+Specifically, ed25519 signatures and VRFs (verifiable random functions) are used in Cardano. 
+Given their similarly structured public keys, one may be tempted to use the same secret key 
+for both the primitives. However, doing so can allow an adversary to easily extract the secret 
+key. Note that cryptosystems that are used in Cardano are proven secure -- see [ed25519](https://datatracker.ietf.org/doc/rfc8032/) and 
+[ECVRF](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-14), however in standalone settings; i.e., ed25519 is proven secure in the setting where an adversary has access to only signatures. 
 
-**NOTE**: this does not imply that using the same 32 secret bytes for any two 
+
+
+
+**NOTE**: this does not imply that using the same  secret keys for any two 
 distinct cryptosystems discloses the secret. However, it should serve as an 
 example that if one is not certain of whether using the same key for two 
 algorithms is secure or not, then the assumption should be that it is not.
@@ -278,7 +272,8 @@ used in VRF and that of ed25519.
 Of course, the best solution, and the one suggested in this blogpost, is to not share the secret 
 keys among different cryptosystems.
 
-Thanks to my wonderful colleagues, Gamze Kilic, David Nevado and Vanishree Rao for comments and review! 
+## Acknowledgements
+Thanks to my wonderful colleagues, Gamze Kilic and Vanishree Rao for comments and review! 
 
 [^1]: A non-expert reader should not be concerned of what this really means. Simply
 one should trust that extracting sk from pk is computationally hard and that
