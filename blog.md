@@ -30,10 +30,10 @@ distinct cryptosystems discloses the secret. However, it should serve as an
 example that if one is not certain of whether using the same key for two 
 algorithms is secure or not, then the assumption should be that it is not.
 
-## Schnorr, the predecessor of Ed25519 and ECVRF
-[Schnorr](https://en.wikipedia.org/wiki/Schnorr_signature) signatures 
-have been around for quite some years, and they are
-deployed and used in many contexts. In Cardano, following our [valentine](https://docs.cardano.org/cardano-testnet/about/secp) 
+## Schnorr Signatures, the Predecessor of Ed25519 and ECVRF
+We will begin by explaining [Schnorr](https://en.wikipedia.org/wiki/Schnorr_signature) signatures, which was the basis of Ed25519 and ECVRF designs. 
+Schnorr signatures have been around for quite some years, and they are
+deployed widely in many applications. In Cardano, following our [valentine](https://docs.cardano.org/cardano-testnet/about/secp) 
 upgrade, we introduced native support for Schnorr signatures over curve SECP256k1 
 in Plutus. Schnorr signatures are simply 
 [sigma protocols](https://en.wikipedia.org/wiki/Proof_of_knowledge#Sigma_protocols) that are 
@@ -48,18 +48,14 @@ the verifier [V]) as follows:
 - [P] computes $s = k + c * sk$, and sends it to the verifier
 - [V] accepts if and only if $s * G = R + c * vk$. 
 
-If one extends $s, R$ and $pk$, it is easy to see that if the protocol is followed,
-the verifier will accept the signature. However, we've just described an interactive
-protocol. How can that be a signature algorithm? Indeed, a signature algorithm would
-be extremely impractical if the signer and verifier would have to interact. To
-that end, the first step of the verifier (computing the random challenge) is 
-replaced by a hash function, which is assumed to provide random, unpredictable 
-outputs. Formally, this is called the 
-[Fiat-Shamir](https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic) heuristic, and is used in more
-modern Zero Knowledge Proofs (yes! Schnorr signatures are very simple proofs of knowledge) to make
-them non-interactive. For sake of simplicity, in this blogpost we describe all procedures
-interactively, and note that any of them can be made non-interactive via the Fiat-Shamir 
-heuristic.
+Note that we have just described an interactive
+protocol, where there is no message involved. We will now describe how it is transformed into a message signing non-interactive version. A typical method used in Cryptography is the so-called [Fiat-Shamir](https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic) transformation that replaces the random challenges with outputs of a random oralce, where the input to the random oracle is the transcript thus far. Furthermore, in order to link a signature
+(as described above) to a message, the latter is inlcuded when computing the hash that 
+defines the challenge. 
+
+For readability, in this blogpost we describe all algorithms in their interactive version and note that any of them can be made non-interactive via the Fiat-Shamir 
+heuristic. Furthermore, for simplicity, we omit specifying the message from the Schnorr-like signature schemes 
+descriptions.
 
 Subtle deviations from the protocol can be catastrophic. One such example is producing two signatures 
 that share the same value $R$ but a different value $s$, this completely breaks the system (for 
@@ -85,7 +81,7 @@ choice was that in the past lack of secure sources of randomness resulted in the
 [security flaw](https://fahrplan.events.ccc.de/congress/2010/Fahrplan/attachments/1780_27c3_console_hacking_2010.pdf)
 of the secret keys for ECDSA. Hence, by computing this value pseudorandomly, one relies on the security
 of the pseudorandom generator (which is in control of the developers) instead of a secure source
-of randomness (which is not in control of the developers). Below, we present a simplified version
+of randomness (which is hard to reliably generate). Below, we present a simplified version
 of ed25519, it differs from the standard, but not in any meaningful way for the attack described
 in this blogpost. Let $\texttt{KDF}$ be a key derivation function[^2] that takes as input a key and an index, and
 returns an integer modulo $p$. Let $(sk, vk)$ be a key-pair such that $vk = \texttt{KDF}(sk, 0) \cdot G$. The 
@@ -120,16 +116,12 @@ protocol proceeds as follows:
 - [V] computes $L \gets H _ {s2c}(vk, m)$, and accepts if and only if $s * G = R + c * vk$ and 
   $s * L = P + c * \Gamma$.
 
-Ahá! seeing this we can conclude that for a given secret key $sk$, both algorithms ed25519 and ECVRF share the 
-same public key. Well, this is convenient. We can prove ownership of a VRF key using an ed25519 signature, which
-turns out to be smaller and cheaper to verify. Or can we?
+Clearly, for the same secret key, both algorithms ed25519 and ECVRF have the 
+same public key. This may seem a highly convenient opportunity to use the same secret key to reduce the burden on the user to remember two keys or to have any complex key derivation mechanisms in place. However, unfortunately, using the same secret key can turn out to be catastrophic.
 
 ## Don't share your secrets!
-If you are reading this blogpost you know what is coming next. Indeed, if we share the secret keys for
-these two algorithms, an adversary could trick an ed25519 signer to basically expose its private key. The way we
-can do this came in a spoiler early on! What is essentially happening here is both VRF and ed25519 use the
-same key derivation function. On the one hand this results in the same $pk$ for a given $sk$. However, this also means
-that one can trick an ed25519 signer produce the same value of $k$ (and consequently $R$) as the VRF counterpart, while
+If the same  secret key is used for
+the two algorithms, then an adversary could trick an ed25519 signer to effectively reveal her secret key. The adversary's strategy was hinted to earlier in the article. The idea is that the adversary can trick an ed25519 signer produce the same value of $k$ (and consequently $R$) as the VRF counterpart, while
 having different values of the challenge $c$. If the adversary manages to do this, then the secret key can be extracted! 
 Worst of all is that it is not an attack hard to pull-off. Given a VRF proof for public key $pk$, the adversary simply 
 needs to request an ed25519 signature from $pk$'s owner to sign $L$, which is a public value. Then both nonces $k$ will 
@@ -263,16 +255,16 @@ And if one runs the script (see the details in the README.md file), we can see t
 faked an ed25519 signature!
                      
 
-## A simple way to resolve this
+## Some Simple Fixes
 While we should not design cryptographic algorithms to be able to share their secret keys, we 
 should acknowledge that unfortunately that is something that highly attracts engineers. One
 existing proposal to solve the problem of deterministic generation of the nonce (that also caused
-[problems](https://www.reddit.com/r/cryptography/comments/vextlk/40_unsafe_ed25519_libs_where_private_key_can_be/) 
+[issues](https://www.reddit.com/r/cryptography/comments/vextlk/40_unsafe_ed25519_libs_where_private_key_can_be/) 
 in some libraries that had an incorrect API) was to combine determinism and secure
 source of randomness, so that the algorithm would have a flaw only if both sources somehow 
 failed.
 
-Another very simple solution is to use a domain separation when computing the value of `k`, i.e.
+Another  simple solution is to use a domain separation when computing the value of `k`, i.e.
 using some sort of padding in the hash function (the same way it is done with the `suite_string` in
 the output computation of the VRF) to ensure that there is no match between the randomness
 used in VRF and that of ed25519.
