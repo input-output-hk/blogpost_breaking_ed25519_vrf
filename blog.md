@@ -56,16 +56,19 @@ the verifier [V]) as follows:
 
 If one extends $s, R$ and $pk$, it is easy to see that if the protocol is followed,
 the verifier will accept the signature. However, we've just described an interactive
-protocol. How can that be a signature algorithm? Indeed, a signature algorithm would
-be extremely impractical if the signer and verifier would have to interact. To
-that end, the first step of the verifier (computing the random challenge) is 
-replaced by a hash function, which is assumed to provide random, unpredictable 
-outputs. Formally, this is called the 
+protocol, where there's no message involved. How can that be a signature algorithm? 
+Indeed, a signature algorithm would be extremely impractical if the signer and verifier 
+would have to interact. To that end, the first step of the verifier (computing the 
+random challenge) is replaced by a hash function, which is assumed to provide random, 
+unpredictable outputs. Here is where the message comes into play. In order to link a signature
+(as described above) to a message, the latter is inlcuded when computing the hash that 
+defines the challenge. Formally, this is called the 
 [Fiat-Shamir](https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic) heuristic, and is used in more
 modern Zero Knowledge Proofs (yes! Schnorr signatures are very simple proofs of knowledge) to make
 them non-interactive. For sake of simplicity, in this blogpost we describe all procedures
 interactively, and note that any of them can be made non-interactive via the Fiat-Shamir 
-heuristic.
+heuristic. Therefore, we omit the message from the Schnorr-like signature schemes 
+descriptions.
 
 Subtle deviations from the protocol can be catastrophic. One such example is producing two signatures 
 that share the same value $R$ but a different value $s$, this completely breaks the system (for 
@@ -286,8 +289,7 @@ used in VRF and that of ed25519.
 Of course, the best solution, and the one suggested in this blogpost, is to not share the secret 
 keys among different cryptosystems.
 
-## Acknowledgements
-Thanks to my wonderful colleagues, Gamze Kilic and Vanishree Rao for comments and review! 
+Thanks to my wonderful colleagues, Gamze Kilic, David Nevado and Vanishree Rao for comments and review! 
 
 [^1]: A non-expert reader should not be concerned of what this really means. Simply
 one should trust that extracting sk from pk is computationally hard and that
