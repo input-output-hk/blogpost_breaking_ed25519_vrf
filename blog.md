@@ -273,7 +273,7 @@ Of course, the best solution, and the one suggested in this blogpost, is to not 
 keys among different cryptosystems.
 
 ## Acknowledgements
-Thanks to my wonderful colleagues, Gamze Kilic and Vanishree Rao for comments and review! 
+Thanks to my wonderful colleagues, Gamze Kilic, David Nevado, and Vanishree Rao for comments and review! 
 
 [^1]: A non-expert reader should not be concerned of what this really means. Simply
 one should trust that extracting sk from pk is computationally hard and that
